@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>의견 · 제안 · 스마트워크 강의자료</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="feedback">
+<div class="app-shell">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <a href="index.html" style="text-decoration:none;">
+        <div class="brand">
+          🌱
+          <span>
+            <span id="navBrandTitle">스마트워크 강의자료</span>
+            <small id="navBrandSub">교육 플랫폼</small>
+          </span>
+        </div>
+      </a>
+      <div class="nav-menu">
+        <a href="index.html" data-page="home">홈</a>
+        <a href="study.html" data-page="study">학습자료</a>
+        <a href="practice.html" data-page="practice">실습자료</a>
+        <a href="questions.html" data-page="questions">질문·답변</a>
+        <a href="feedback.html" data-page="feedback">의견제안</a>
+        <a href="notices.html" data-page="notices">공지사항</a>
+        <a href="admin.html" data-page="admin" style="opacity:.55;font-size:12px;">관리자</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <h1 class="page-title">💌 의견 · 제안</h1>
+    <p class="page-desc">좋았던 점, 아쉬운 점, 개선사항, 추가로 듣고 싶은 주제 등 자유롭게 남겨주세요.</p>
+
+    <div class="card">
+      <label>의견 내용 *</label>
+      <textarea id="fContent" placeholder="예) 좋았던 점 / 아쉬운 점 / 개선사항 / 추가 교육 희망 주제 등"></textarea>
+
+      <div class="checkbox-row">
+        <input type="checkbox" id="fWantAnswer">
+        <label style="margin:0;" for="fWantAnswer">답변을 받고 싶습니다.</label>
+      </div>
+
+      <div class="form-extra" id="fExtra" style="display:none;">
+        <label>소속</label>
+        <input type="text" id="fOrg">
+        <label>이름</label>
+        <input type="text" id="fName">
+        <label>연락처</label>
+        <input type="tel" id="fPhone" placeholder="010-0000-0000">
+        <label>이메일</label>
+        <input type="email" id="fEmail">
+      </div>
+
+      <div style="margin-top:18px;">
+        <button class="btn accent" id="fSubmitBtn">의견 등록하기</button>
+      </div>
+    </div>
+
+    <div id="adminFeedbackWrap"></div>
+  </div>
+
+  <footer class="site-footer">
+    <div>스마트워크 강의자료 · 교육 종료 후에도 자유롭게 참고자료를 활용하세요.</div>
+    <div id="footerContact" style="margin-top:4px;font-size:11px;opacity:.75;"></div>
+  </footer>
+</div>
+<div id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/common.js"></script>
+<script>
+  document.getElementById('fWantAnswer').addEventListener('change', function () {
+    document.getElementById('fExtra').style.display = this.checked ? 'block' : 'none';
+  });
+
+  document.getElementById('fSubmitBtn').addEventListener('click', function () {
+    var content = document.getElementById('fContent').value.trim();
+    if (!content) { showToast('내용을 입력해주세요.'); return; }
+    var wantAnswer = document.getElementById('fWantAnswer').checked;
+    var form = {
+      content: content,
+      affiliation: wantAnswer ? document.getElementById('fOrg').value.trim() : '',
+      name: wantAnswer ? document.getElementById('fName').value.trim() : '',
+      contact: wantAnswer ? document.getElementById('fPhone').value.trim() : '',
+      email: wantAnswer ? document.getElementById('fEmail').value.trim() : ''
+    };
+    var btn = this;
+    btn.disabled = true;
+    sb.from('의견').insert(form).then(function (res) {
+      btn.disabled = false;
+      if (res.error) {
+        showToast('등록 실패: ' + res.error.message);
+        return;
+      }
+      showToast('의견이 등록되었습니다. 감사합니다!');
+      document.getElementById('fContent').value = '';
+      document.getElementById('fWantAnswer').checked = false;
+      document.getElementById('fExtra').style.display = 'none';
+      ['fOrg', 'fName', 'fPhone', 'fEmail'].forEach(function (id) { document.getElementById(id).value = ''; });
+      loadAdminFeedback();
+    });
+  });
+
+  function loadAdminFeedback() {
+    var wrap = document.getElementById('adminFeedbackWrap');
+    getIsAdmin().then(function (isAdmin) {
+      if (!isAdmin) { wrap.innerHTML = ''; return; }
+      sb.from('의견').select('*').order('created_at', { ascending: false }).then(function (res) {
+        if (res.error) { wrap.innerHTML = ''; return; }
+        var rows = res.data || [];
+        var html = '<h2 style="margin-top:36px;font-size:18px;">📮 등록된 의견 (관리자 전용)</h2><div class="card">';
+        if (!rows.length) {
+          html += '<div class="empty-state">등록된 의견이 없습니다.</div>';
+        } else {
+          html += rows.map(function (f) {
+            var contact = f.name ? ('소속: ' + escapeHtml(f.affiliation) + ' · 이름: ' + escapeHtml(f.name) +
+              ' · 연락처: ' + escapeHtml(f.contact) + ' · 이메일: ' + escapeHtml(f.email)) : '익명';
+            return '<div class="list-item">' +
+              '<div class="title">' + escapeHtml(f.content) + '</div>' +
+              '<div class="date">' + escapeHtml(f.created_at ? f.created_at.slice(0, 10) : '') + ' · ' + contact + '</div>' +
+              '<div style="margin-top:8px;"><button class="btn small danger feedback-del-btn" data-id="' + f.id + '">삭제</button></div>' +
+              '</div>';
+          }).join('');
+        }
+        html += '</div>';
+        wrap.innerHTML = html;
+
+        wrap.querySelectorAll('.feedback-del-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            if (!confirm('정말 삭제하시겠습니까?')) return;
+            sb.from('의견').delete().eq('id', Number(btn.getAttribute('data-id'))).then(function (r) {
+              if (r.error) { showToast('삭제 실패: ' + r.error.message); return; }
+              showToast('삭제되었습니다.');
+              loadAdminFeedback();
+            });
+          });
+        });
+      });
+    });
+  }
+
+  loadAdminFeedback();
+</script>
+</body>
+</html>
