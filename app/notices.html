@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>공지사항 · 스마트워크 강의자료</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="notices">
+<div class="app-shell">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <a href="index.html" style="text-decoration:none;">
+        <div class="brand">
+          🌱
+          <span>
+            <span id="navBrandTitle">스마트워크 강의자료</span>
+            <small id="navBrandSub">교육 플랫폼</small>
+          </span>
+        </div>
+      </a>
+      <div class="nav-menu">
+        <a href="index.html" data-page="home">홈</a>
+        <a href="study.html" data-page="study">학습자료</a>
+        <a href="practice.html" data-page="practice">실습자료</a>
+        <a href="questions.html" data-page="questions">질문·답변</a>
+        <a href="feedback.html" data-page="feedback">의견제안</a>
+        <a href="notices.html" data-page="notices">공지사항</a>
+        <a href="admin.html" data-page="admin" style="opacity:.55;font-size:12px;">관리자</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <h1 class="page-title">📢 공지사항</h1>
+    <p class="page-desc" id="pageDesc">강의 중 변경사항과 안내사항을 확인하세요. 제목을 클릭하면 상세 내용을 볼 수 있습니다.</p>
+
+    <div id="adminAddWrap"></div>
+
+    <div class="card" id="noticeWrap">
+      <div class="loading-row"><span class="spinner"></span> 불러오는 중...</div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div>스마트워크 강의자료 · 교육 종료 후에도 자유롭게 참고자료를 활용하세요.</div>
+    <div id="footerContact" style="margin-top:4px;font-size:11px;opacity:.75;"></div>
+  </footer>
+</div>
+<div id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/common.js"></script>
+<script>
+  var IS_ADMIN = false;
+  var ROWS = [];
+  var editingId = null;
+  var adding = false;
+
+  function getIdFromUrl() {
+    var m = /(?:^|[?&])id=(\d+)/.exec(window.location.search);
+    return m ? Number(m[1]) : null;
+  }
+
+  function navigateTo(id) {
+    var url = id ? ('notices.html?id=' + id) : 'notices.html';
+    history.pushState(null, '', url);
+    editingId = null;
+    route();
+  }
+
+  window.addEventListener('popstate', route);
+
+  function load() {
+    getIsAdmin().then(function (isAdmin) {
+      IS_ADMIN = isAdmin;
+      return sb.from('공지사항').select('*').order('created_at', { ascending: false });
+    }).then(function (res) {
+      if (res.error) {
+        document.getElementById('noticeWrap').innerHTML = '<div class="empty-state">불러오기 실패: ' + escapeHtml(res.error.message) + '</div>';
+        return;
+      }
+      ROWS = res.data || [];
+      route();
+    });
+  }
+
+  function route() {
+    var id = getIdFromUrl();
+    var notice = id ? ROWS.filter(function (n) { return n.id === id; })[0] : null;
+    if (notice) {
+      document.getElementById('pageDesc').textContent = '목록으로 돌아가서 다른 공지사항도 확인해보세요.';
+      renderAddForm();
+      renderDetail(notice);
+    } else {
+      document.getElementById('pageDesc').textContent = '강의 중 변경사항과 안내사항을 확인하세요. 제목을 클릭하면 상세 내용을 볼 수 있습니다.';
+      renderAddForm();
+      renderList();
+    }
+  }
+
+  function renderAddForm() {
+    var wrap = document.getElementById('adminAddWrap');
+    if (!IS_ADMIN || getIdFromUrl()) { wrap.innerHTML = ''; return; }
+    if (!adding) {
+      wrap.innerHTML = '<button class="btn accent" id="openAddBtn" style="margin-bottom:16px;">+ 새 공지 작성</button>';
+      document.getElementById('openAddBtn').addEventListener('click', function () { adding = true; renderAddForm(); });
+      return;
+    }
+    wrap.innerHTML = '<div class="card" style="margin-bottom:16px;">' +
+      '<label>제목</label><input type="text" id="newTitle">' +
+      '<label>내용</label><textarea id="newContent"></textarea>' +
+      '<div class="checkbox-row"><input type="checkbox" id="newVisible" checked><label style="margin:0;" for="newVisible">공개</label></div>' +
+      '<div style="margin-top:14px;"><button class="btn" id="saveAddBtn">등록</button> <button class="btn secondary" id="cancelAddBtn">취소</button></div>' +
+      '</div>';
+    document.getElementById('cancelAddBtn').addEventListener('click', function () { adding = false; renderAddForm(); });
+    document.getElementById('saveAddBtn').addEventListener('click', function () {
+      var title = document.getElementById('newTitle').value.trim();
+      var content = document.getElementById('newContent').value.trim();
+      if (!title || !content) { showToast('제목과 내용을 입력해주세요.'); return; }
+      sb.from('공지사항').insert({ title: title, content: content, is_visible: document.getElementById('newVisible').checked }).then(function (r) {
+        if (r.error) { showToast('등록 실패: ' + r.error.message); return; }
+        showToast('등록되었습니다.');
+        adding = false;
+        load();
+      });
+    });
+  }
+
+  function renderList() {
+    var wrap = document.getElementById('noticeWrap');
+    if (!ROWS.length) {
+      wrap.innerHTML = '<div class="empty-state">등록된 공지사항이 없습니다.</div>';
+      return;
+    }
+    var total = ROWS.length;
+    wrap.innerHTML = ROWS.map(function (n, idx) {
+      var hiddenBadge = (IS_ADMIN && !n.is_visible) ? ' <span class="badge accent">비공개</span>' : '';
+      return '<div class="list-item">' +
+        '<div class="title board-toggle" data-id="' + n.id + '" style="cursor:pointer;display:flex;gap:10px;align-items:baseline;">' +
+        '<span class="badge">' + (total - idx) + '</span>' +
+        '<span>' + escapeHtml(n.title) + hiddenBadge + '</span>' +
+        '</div>' +
+        '<div class="date">' + escapeHtml(n.created_at ? n.created_at.slice(0, 10) : '') + '</div>' +
+        '</div>';
+    }).join('');
+
+    wrap.querySelectorAll('.board-toggle').forEach(function (el) {
+      el.addEventListener('click', function () {
+        navigateTo(Number(el.getAttribute('data-id')));
+      });
+    });
+  }
+
+  function renderDetail(n) {
+    var wrap = document.getElementById('noticeWrap');
+    var hiddenBadge = (IS_ADMIN && !n.is_visible) ? ' <span class="badge accent">비공개</span>' : '';
+
+    if (editingId === n.id) {
+      wrap.innerHTML =
+        '<label>제목</label><input type="text" id="editTitle_' + n.id + '" value="' + escapeHtml(n.title) + '">' +
+        '<label>내용</label><textarea id="editContent_' + n.id + '">' + escapeHtml(n.content) + '</textarea>' +
+        '<div class="checkbox-row"><input type="checkbox" id="editVisible_' + n.id + '"' + (n.is_visible ? ' checked' : '') + '><label style="margin:0;">공개</label></div>' +
+        '<div style="margin-top:10px;"><button class="btn small save-edit-btn">저장</button> <button class="btn small secondary cancel-edit-btn">취소</button></div>';
+      wrap.querySelector('.cancel-edit-btn').addEventListener('click', function () { editingId = null; route(); });
+      wrap.querySelector('.save-edit-btn').addEventListener('click', function () {
+        var title = document.getElementById('editTitle_' + n.id).value.trim();
+        var content = document.getElementById('editContent_' + n.id).value.trim();
+        var visible = document.getElementById('editVisible_' + n.id).checked;
+        if (!title || !content) { showToast('제목과 내용을 입력해주세요.'); return; }
+        sb.from('공지사항').update({ title: title, content: content, is_visible: visible }).eq('id', n.id).then(function (r) {
+          if (r.error) { showToast('저장 실패: ' + r.error.message); return; }
+          showToast('저장되었습니다.');
+          editingId = null;
+          load();
+        });
+      });
+      return;
+    }
+
+    wrap.innerHTML =
+      '<button class="btn secondary small" id="backBtn" style="margin-bottom:16px;">← 목록으로</button>' +
+      '<h2 style="margin:0 0 4px;">' + escapeHtml(n.title) + hiddenBadge + '</h2>' +
+      '<div class="date" style="margin-bottom:16px;">' + escapeHtml(n.created_at ? n.created_at.slice(0, 10) : '') + '</div>' +
+      '<p style="white-space:pre-wrap;margin:0;">' + escapeHtml(n.content) + '</p>' +
+      (IS_ADMIN
+        ? '<div style="margin-top:18px;"><button class="btn small edit-btn">수정</button> <button class="btn small danger del-btn">삭제</button></div>'
+        : '');
+
+    document.getElementById('backBtn').addEventListener('click', function () { navigateTo(null); });
+    var editBtn = wrap.querySelector('.edit-btn');
+    if (editBtn) editBtn.addEventListener('click', function () { editingId = n.id; route(); });
+    var delBtn = wrap.querySelector('.del-btn');
+    if (delBtn) delBtn.addEventListener('click', function () {
+      if (!confirm('정말 삭제하시겠습니까?')) return;
+      sb.from('공지사항').delete().eq('id', n.id).then(function (r) {
+        if (r.error) { showToast('삭제 실패: ' + r.error.message); return; }
+        showToast('삭제되었습니다.');
+        navigateTo(null);
+        load();
+      });
+    });
+  }
+
+  load();
+</script>
+</body>
+</html>

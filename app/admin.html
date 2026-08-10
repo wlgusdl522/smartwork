@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>관리자 · 스마트워크 강의자료</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="admin">
+<div class="app-shell">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <a href="index.html" style="text-decoration:none;">
+        <div class="brand">
+          🌱
+          <span>
+            <span id="navBrandTitle">스마트워크 강의자료</span>
+            <small id="navBrandSub">교육 플랫폼</small>
+          </span>
+        </div>
+      </a>
+      <div class="nav-menu">
+        <a href="index.html" data-page="home">홈</a>
+        <a href="study.html" data-page="study">학습자료</a>
+        <a href="practice.html" data-page="practice">실습자료</a>
+        <a href="questions.html" data-page="questions">질문·답변</a>
+        <a href="feedback.html" data-page="feedback">의견제안</a>
+        <a href="notices.html" data-page="notices">공지사항</a>
+        <a href="admin.html" data-page="admin" style="opacity:.55;font-size:12px;">관리자</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="loginView" class="login-box card">
+      <h2 style="margin-top:0;">🔐 관리자 로그인</h2>
+      <label>이메일</label>
+      <input type="text" id="loginEmail" placeholder="관리자 이메일">
+      <label>비밀번호</label>
+      <input type="password" id="loginPw" placeholder="관리자 비밀번호">
+      <div style="margin-top:16px;">
+        <button class="btn" id="loginBtn">로그인</button>
+      </div>
+      <p id="loginError" style="color:#c62828;font-size:13px;margin-top:10px;"></p>
+    </div>
+
+    <div id="adminView" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h1 class="page-title">🛠 관리자</h1>
+        <button class="btn secondary small" id="logoutBtn">로그아웃</button>
+      </div>
+      <div class="card" style="margin-bottom:20px;">
+        ✅ 로그인되었습니다. 이제 <strong>공지사항 · 학습자료 · 실습자료 · 질문·답변</strong> 페이지에서 바로 글쓰기·수정·삭제 버튼이 보여요.
+        <div style="margin-top:10px;">
+          <a href="notices.html" class="btn small secondary">공지사항</a>
+          <a href="study.html" class="btn small secondary">학습자료</a>
+          <a href="practice.html" class="btn small secondary">실습자료</a>
+          <a href="questions.html" class="btn small secondary">질문·답변</a>
+          <a href="feedback.html" class="btn small secondary">의견함</a>
+        </div>
+      </div>
+
+      <h2 style="font-size:18px;">⚙️ 강의 설정</h2>
+      <div class="card" id="settingsBody"></div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div>스마트워크 강의자료 · 교육 종료 후에도 자유롭게 참고자료를 활용하세요.</div>
+    <div id="footerContact" style="margin-top:4px;font-size:11px;opacity:.75;"></div>
+  </footer>
+</div>
+<div id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/common.js"></script>
+<script>
+  function showAdminView() {
+    document.getElementById('loginView').style.display = 'none';
+    document.getElementById('adminView').style.display = 'block';
+    renderSettings();
+  }
+
+  function showLoginView() {
+    document.getElementById('loginView').style.display = 'block';
+    document.getElementById('adminView').style.display = 'none';
+  }
+
+  document.getElementById('loginBtn').addEventListener('click', function () {
+    var email = document.getElementById('loginEmail').value.trim();
+    var pw = document.getElementById('loginPw').value;
+    var btn = this;
+    btn.disabled = true;
+    sb.auth.signInWithPassword({ email: email, password: pw }).then(function (res) {
+      btn.disabled = false;
+      if (res.error) {
+        document.getElementById('loginError').textContent = res.error.message;
+        return;
+      }
+      document.getElementById('loginError').textContent = '';
+      showAdminView();
+    });
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', function () {
+    sb.auth.signOut().then(function () { showLoginView(); });
+  });
+
+  function renderSettings() {
+    var body = document.getElementById('settingsBody');
+    body.innerHTML = '<div class="empty-state">불러오는 중...</div>';
+    var fields = [
+      { key: 'course_name', label: '강의명' },
+      { key: 'instructor_name', label: '강사명' },
+      { key: 'instructor_contact', label: '강사 연락처' },
+      { key: 'intro', label: '소개', type: 'textarea' },
+      { key: 'education_date', label: '교육일', type: 'date' },
+      { key: 'admin_email', label: '관리자이메일' },
+      { key: 'period1_title', label: '1교시제목' },
+      { key: 'period1_desc', label: '1교시설명', type: 'textarea' },
+      { key: 'period2_title', label: '2교시제목' },
+      { key: 'period2_desc', label: '2교시설명', type: 'textarea' }
+    ];
+    sb.from('설정').select('*').eq('id', 1).single().then(function (res) {
+      if (res.error) { showToast(res.error.message); body.innerHTML = ''; return; }
+      var s = res.data || {};
+      body.innerHTML = fields.map(function (f) {
+        var val = s[f.key] == null ? '' : s[f.key];
+        return '<label>' + f.label + '</label>' +
+          (f.type === 'textarea'
+            ? '<textarea data-field="' + f.key + '">' + escapeHtml(val) + '</textarea>'
+            : '<input type="' + (f.type === 'date' ? 'date' : 'text') + '" data-field="' + f.key + '" value="' + escapeHtml(val) + '">');
+      }).join('') + '<div style="margin-top:18px;"><button class="btn" id="settingsSaveBtn">저장</button></div>';
+
+      document.getElementById('settingsSaveBtn').addEventListener('click', function () {
+        var obj = {};
+        body.querySelectorAll('[data-field]').forEach(function (el) { obj[el.getAttribute('data-field')] = el.value; });
+        var btn = this;
+        btn.disabled = true;
+        sb.from('설정').update(obj).eq('id', 1).then(function (r) {
+          btn.disabled = false;
+          if (r.error) { showToast(r.error.message); return; }
+          showToast('설정이 저장되었습니다.');
+        });
+      });
+    });
+  }
+
+  sb.auth.getSession().then(function (res) {
+    if (res.data && res.data.session) showAdminView();
+  });
+
+  sb.auth.onAuthStateChange(function (event, session) {
+    if (event === 'SIGNED_OUT') showLoginView();
+  });
+</script>
+</body>
+</html>

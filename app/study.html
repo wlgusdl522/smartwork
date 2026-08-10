@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>학습자료 · 스마트워크 강의자료</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="study">
+<div class="app-shell">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <a href="index.html" style="text-decoration:none;">
+        <div class="brand">
+          🌱
+          <span>
+            <span id="navBrandTitle">스마트워크 강의자료</span>
+            <small id="navBrandSub">교육 플랫폼</small>
+          </span>
+        </div>
+      </a>
+      <div class="nav-menu">
+        <a href="index.html" data-page="home">홈</a>
+        <a href="study.html" data-page="study">학습자료</a>
+        <a href="practice.html" data-page="practice">실습자료</a>
+        <a href="questions.html" data-page="questions">질문·답변</a>
+        <a href="feedback.html" data-page="feedback">의견제안</a>
+        <a href="notices.html" data-page="notices">공지사항</a>
+        <a href="admin.html" data-page="admin" style="opacity:.55;font-size:12px;">관리자</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <h1 class="page-title">📚 학습자료</h1>
+    <p class="page-desc">교육자료, AI 도구, 참고자료를 한 곳에서 확인하세요.</p>
+
+    <div class="tabs" id="tabBar">
+      <button class="tab-btn active" data-tab="교육자료">📚 교육자료</button>
+      <button class="tab-btn" data-tab="AI도구">🤖 AI도구</button>
+      <button class="tab-btn" data-tab="참고자료">🔗 참고자료</button>
+    </div>
+    <div id="adminAddWrap"></div>
+    <div id="tabBody">
+      <div class="loading-row"><span class="spinner"></span> 불러오는 중...</div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div>스마트워크 강의자료 · 교육 종료 후에도 자유롭게 참고자료를 활용하세요.</div>
+    <div id="footerContact" style="margin-top:4px;font-size:11px;opacity:.75;"></div>
+  </footer>
+</div>
+<div id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/common.js"></script>
+<script>
+  var TABS = {
+    '교육자료': { table: '교육자료', nameField: 'title', hasIcon: true, gridClass: 'grid-2', center: false,
+      emptyMsg: '등록된 교육자료가 없습니다.', addLabel: '+ 자료 추가', linkLabel: '열기 →', linkBtnClass: 'btn' },
+    'AI도구': { table: 'AI도구', nameField: 'name', hasIcon: true, gridClass: 'grid-3', center: true,
+      emptyMsg: '등록된 AI 도구가 없습니다.', addLabel: '+ AI도구 추가', linkLabel: '바로가기', linkBtnClass: 'btn secondary' },
+    '참고자료': { table: '참고자료', nameField: 'title', hasIcon: false, gridClass: 'grid-2', center: false,
+      emptyMsg: '등록된 참고자료가 없습니다.', addLabel: '+ 참고자료 추가', linkLabel: '바로가기 →', linkBtnClass: 'btn secondary' }
+  };
+  var NAME_LABEL = { title: '제목', name: '이름' };
+
+  var ICON_OPTIONS = [
+    ['📄', '문서'], ['📊', '그래프/PPT'], ['📽️', '슬라이드'], ['▶️', '영상/유튜브'], ['📁', '폴더'],
+    ['🔗', '링크'], ['💻', '코드'], ['🖥️', '컴퓨터'], ['📱', '모바일'],
+    ['🤖', '로봇/AI'], ['🧠', '두뇌/AI'], ['✨', '반짝임'], ['🎯', '목표'], ['🔎', '검색'],
+    ['📓', '노트'], ['🧪', '실험'], ['🛠', '도구'], ['⚙️', '설정'],
+    ['📢', '공지'], ['💡', '아이디어'], ['🎓', '학습'], ['📌', '고정'], ['🎤', '발표'], ['📈', '성장'], ['✅', '체크'], ['🌱', '새싹']
+  ];
+  var ICON_CUSTOM = '__custom__';
+
+  var IS_ADMIN = false;
+  var activeTab = '교육자료';
+  var CACHE = {};
+  var editingId = null;
+  var adding = false;
+
+  function fieldsForm(cfg, prefix, row) {
+    row = row || {};
+    var html = '<label>' + NAME_LABEL[cfg.nameField] + '</label><input type="text" id="' + prefix + 'Name" value="' + escapeHtml(row[cfg.nameField]) + '">' +
+      '<label>설명</label><textarea id="' + prefix + 'Desc">' + escapeHtml(row.description) + '</textarea>' +
+      '<label>링크</label><input type="text" id="' + prefix + 'Link" value="' + escapeHtml(row.link) + '">';
+    if (cfg.hasIcon) {
+      var currentIcon = row.icon || '';
+      var isKnown = ICON_OPTIONS.some(function (opt) { return opt[0] === currentIcon; });
+      html += '<label>아이콘</label><select id="' + prefix + 'Icon">' +
+        '<option value="">선택 안 함</option>' +
+        ICON_OPTIONS.map(function (opt) {
+          return '<option value="' + opt[0] + '"' + (opt[0] === currentIcon ? ' selected' : '') + '>' + opt[0] + ' ' + opt[1] + '</option>';
+        }).join('') +
+        '<option value="' + ICON_CUSTOM + '"' + (currentIcon && !isKnown ? ' selected' : '') + '>직접 입력...</option>' +
+        '</select>' +
+        '<input type="text" id="' + prefix + 'IconCustom" placeholder="이모지를 직접 입력/붙여넣기 하세요" ' +
+        'value="' + (currentIcon && !isKnown ? escapeHtml(currentIcon) : '') + '" ' +
+        'style="margin-top:8px;' + (currentIcon && !isKnown ? '' : 'display:none;') + '">';
+    }
+    return html;
+  }
+
+  function bindIconPicker(prefix) {
+    var select = document.getElementById(prefix + 'Icon');
+    if (!select) return;
+    var customInput = document.getElementById(prefix + 'IconCustom');
+    select.addEventListener('change', function () {
+      customInput.style.display = (select.value === ICON_CUSTOM) ? 'block' : 'none';
+    });
+  }
+
+  function iconValue(prefix) {
+    var select = document.getElementById(prefix + 'Icon');
+    if (select.value === ICON_CUSTOM) {
+      return document.getElementById(prefix + 'IconCustom').value.trim();
+    }
+    return select.value;
+  }
+
+  function renderAddForm() {
+    var cfg = TABS[activeTab];
+    var wrap = document.getElementById('adminAddWrap');
+    if (!IS_ADMIN) { wrap.innerHTML = ''; return; }
+    if (!adding) {
+      wrap.innerHTML = '<button class="btn accent" id="openAddBtn" style="margin-bottom:16px;">' + cfg.addLabel + '</button>';
+      document.getElementById('openAddBtn').addEventListener('click', function () { adding = true; renderAddForm(); });
+      return;
+    }
+    wrap.innerHTML = '<div class="card" style="margin-bottom:16px;">' + fieldsForm(cfg, 'new', {}) +
+      '<div style="margin-top:14px;"><button class="btn" id="saveAddBtn">등록</button> <button class="btn secondary" id="cancelAddBtn">취소</button></div></div>';
+    bindIconPicker('new');
+    document.getElementById('cancelAddBtn').addEventListener('click', function () { adding = false; renderAddForm(); });
+    document.getElementById('saveAddBtn').addEventListener('click', function () {
+      var name = document.getElementById('newName').value.trim();
+      if (!name) { showToast(NAME_LABEL[cfg.nameField] + '을 입력해주세요.'); return; }
+      var obj = {};
+      obj[cfg.nameField] = name;
+      obj.description = document.getElementById('newDesc').value.trim();
+      obj.link = document.getElementById('newLink').value.trim();
+      if (cfg.hasIcon) obj.icon = iconValue('new');
+      sb.from(cfg.table).insert(obj).then(function (r) {
+        if (r.error) { showToast('등록 실패: ' + r.error.message); return; }
+        showToast('등록되었습니다.');
+        adding = false;
+        delete CACHE[activeTab];
+        loadTab();
+      });
+    });
+  }
+
+  function renderList() {
+    var cfg = TABS[activeTab];
+    var rows = CACHE[activeTab] || [];
+    var body = document.getElementById('tabBody');
+    if (!rows.length) {
+      body.innerHTML = '<div class="empty-state">' + cfg.emptyMsg + '</div>';
+      return;
+    }
+    body.innerHTML = '<div class="grid ' + cfg.gridClass + '">' + rows.map(function (row) {
+      if (editingId === row.id) {
+        return '<div class="card">' + fieldsForm(cfg, 'edit' + row.id, row) +
+          '<div style="margin-top:12px;"><button class="btn small save-edit-btn" data-id="' + row.id + '">저장</button> <button class="btn small secondary cancel-edit-btn">취소</button></div></div>';
+      }
+      var iconHtml = cfg.hasIcon
+        ? '<div style="font-size:' + (cfg.center ? 32 : 28) + 'px;">' + escapeHtml(row.icon || (cfg.center ? '🤖' : '📄')) + '</div>'
+        : '';
+      return '<div class="card"' + (cfg.center ? ' style="text-align:center;"' : '') + '>' +
+        iconHtml +
+        '<div style="font-weight:800;margin-top:8px;">' + escapeHtml(row[cfg.nameField]) + '</div>' +
+        '<p style="color:var(--text-mute);font-size:14px;margin:6px 0 14px;">' + escapeHtml(row.description) + '</p>' +
+        '<a class="' + cfg.linkBtnClass + '" href="' + escapeHtml(row.link) + '" target="_blank" rel="noopener">' + cfg.linkLabel + '</a>' +
+        (IS_ADMIN ? '<div style="margin-top:10px;"><button class="btn small edit-btn" data-id="' + row.id + '">수정</button> <button class="btn small danger del-btn" data-id="' + row.id + '">삭제</button></div>' : '') +
+        '</div>';
+    }).join('') + '</div>';
+
+    if (editingId != null) bindIconPicker('edit' + editingId);
+
+    body.querySelectorAll('.edit-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () { editingId = Number(btn.getAttribute('data-id')); renderList(); });
+    });
+    body.querySelectorAll('.cancel-edit-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () { editingId = null; renderList(); });
+    });
+    body.querySelectorAll('.save-edit-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = Number(btn.getAttribute('data-id'));
+        var p = 'edit' + id;
+        var obj = {};
+        obj[cfg.nameField] = document.getElementById(p + 'Name').value.trim();
+        obj.description = document.getElementById(p + 'Desc').value.trim();
+        obj.link = document.getElementById(p + 'Link').value.trim();
+        if (cfg.hasIcon) obj.icon = iconValue(p);
+        sb.from(cfg.table).update(obj).eq('id', id).then(function (r) {
+          if (r.error) { showToast('저장 실패: ' + r.error.message); return; }
+          showToast('저장되었습니다.');
+          editingId = null;
+          delete CACHE[activeTab];
+          loadTab();
+        });
+      });
+    });
+    body.querySelectorAll('.del-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!confirm('정말 삭제하시겠습니까?')) return;
+        sb.from(cfg.table).delete().eq('id', Number(btn.getAttribute('data-id'))).then(function (r) {
+          if (r.error) { showToast('삭제 실패: ' + r.error.message); return; }
+          showToast('삭제되었습니다.');
+          delete CACHE[activeTab];
+          loadTab();
+        });
+      });
+    });
+  }
+
+  function loadTab() {
+    renderAddForm();
+    var cfg = TABS[activeTab];
+    if (CACHE[activeTab]) { renderList(); return; }
+    document.getElementById('tabBody').innerHTML = '<div class="loading-row"><span class="spinner"></span> 불러오는 중...</div>';
+    sb.from(cfg.table).select('*').order('sort_order', { ascending: true }).then(function (res) {
+      if (res.error) {
+        document.getElementById('tabBody').innerHTML = '<div class="empty-state">불러오기 실패: ' + escapeHtml(res.error.message) + '</div>';
+        return;
+      }
+      CACHE[activeTab] = res.data || [];
+      renderList();
+    });
+  }
+
+  document.querySelectorAll('#tabBar .tab-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('#tabBar .tab-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      activeTab = btn.getAttribute('data-tab');
+      editingId = null;
+      adding = false;
+      loadTab();
+    });
+  });
+
+  getIsAdmin().then(function (isAdmin) {
+    IS_ADMIN = isAdmin;
+    loadTab();
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>스마트워크 강의자료</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="home">
+<div class="app-shell">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <a href="index.html" style="text-decoration:none;">
+        <div class="brand">
+          🌱
+          <span>
+            <span id="navBrandTitle">스마트워크 강의자료</span>
+            <small id="navBrandSub">교육 플랫폼</small>
+          </span>
+        </div>
+      </a>
+      <div class="nav-menu">
+        <a href="index.html" data-page="home">홈</a>
+        <a href="study.html" data-page="study">학습자료</a>
+        <a href="practice.html" data-page="practice">실습자료</a>
+        <a href="questions.html" data-page="questions">질문·답변</a>
+        <a href="feedback.html" data-page="feedback">의견제안</a>
+        <a href="notices.html" data-page="notices">공지사항</a>
+        <a href="admin.html" data-page="admin" style="opacity:.55;font-size:12px;">관리자</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="hero">
+      <h1 id="homeTitle">불러오는 중...</h1>
+      <div class="meta" id="homeMeta"></div>
+      <p id="homeIntro"></p>
+
+      <div class="section-label">🎯 오늘의 진행 순서</div>
+      <div class="session-row">
+        <div class="session-card">
+          <div class="num">SESSION 1</div>
+          <strong id="session1Title"></strong>
+          <p id="session1Desc" style="margin:6px 0 0;color:var(--text-mute);font-size:14px;"></p>
+        </div>
+        <div class="session-card">
+          <div class="num">SESSION 2</div>
+          <strong id="session2Title"></strong>
+          <p id="session2Desc" style="margin:6px 0 0;color:var(--text-mute);font-size:14px;"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <strong>📌 공지사항</strong>
+      <div id="noticeList" style="margin-top:10px;">
+        <div class="loading-row"><span class="spinner"></span> 불러오는 중...</div>
+      </div>
+      <div style="margin-top:10px;"><a href="notices.html">공지사항 전체보기 →</a></div>
+    </div>
+
+    <div class="quick-nav">
+      <a href="study.html"><span class="emoji">📚</span>학습자료</a>
+      <a href="practice.html"><span class="emoji">💻</span>실습자료</a>
+      <a href="questions.html"><span class="emoji">❓</span>질문·답변</a>
+      <a href="feedback.html"><span class="emoji">💌</span>의견·제안</a>
+      <a href="notices.html"><span class="emoji">📢</span>공지사항</a>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div>스마트워크 강의자료 · 교육 종료 후에도 자유롭게 참고자료를 활용하세요.</div>
+    <div id="footerContact" style="margin-top:4px;font-size:11px;opacity:.75;"></div>
+  </footer>
+</div>
+<div id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/common.js"></script>
+<script>
+  Promise.all([
+    sb.from('설정').select('*').eq('id', 1).single(),
+    sb.from('공지사항').select('*').eq('is_visible', true).order('created_at', { ascending: false }).limit(3)
+  ]).then(function (results) {
+    var s = results[0].data || {};
+    document.getElementById('homeTitle').textContent = s.course_name || '스마트워크 강의자료';
+    document.getElementById('homeMeta').textContent =
+      (s.instructor_name ? '강사: ' + s.instructor_name : '') + (s.education_date ? '  ·  교육일: ' + s.education_date : '');
+    document.getElementById('homeIntro').textContent = s.intro || '';
+    document.getElementById('session1Title').textContent = s.period1_title || '1교시';
+    document.getElementById('session1Desc').textContent = s.period1_desc || '';
+    document.getElementById('session2Title').textContent = s.period2_title || '2교시';
+    document.getElementById('session2Desc').textContent = s.period2_desc || '';
+
+    var notices = results[1].data || [];
+    var list = document.getElementById('noticeList');
+    if (!notices.length) {
+      list.innerHTML = '<div class="empty-state">등록된 공지사항이 없습니다.</div>';
+    } else {
+      list.innerHTML = notices.map(function (n) {
+        return '<a class="list-item" href="notices.html?id=' + n.id + '" style="display:block;color:inherit;">' +
+          '<div class="title">' + escapeHtml(n.title) + '</div>' +
+          '<div class="date">' + escapeHtml(n.created_at ? n.created_at.slice(0, 10) : '') + '</div></a>';
+      }).join('');
+    }
+  }).catch(function (err) {
+    document.getElementById('homeTitle').textContent = '스마트워크 강의자료';
+    showToast('데이터를 불러오지 못했습니다: ' + err.message);
+  });
+</script>
+</body>
+</html>
