@@ -150,6 +150,19 @@ textarea { resize: vertical; min-height: 90px; }
 }
 .tab-btn.active { background: var(--brand); color: #fff; border-color: var(--brand); }
 
+.tabs-primary { margin-bottom: 16px; }
+.tabs-primary .tab-btn { font-size: 15px; padding: 10px 22px; font-weight: 800; }
+
+/* Masonry gallery (실습공유) */
+.masonry { column-count: 3; column-gap: 16px; }
+.masonry-item {
+  break-inside: avoid; margin-bottom: 16px; background: var(--card);
+  border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
+}
+.masonry-item img { width: 100%; display: block; }
+@media (max-width: 900px) { .masonry { column-count: 2; } }
+@media (max-width: 600px) { .masonry { column-count: 1; } }
+
 /* Table (admin) */
 table.admin-table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; }
 table.admin-table th, table.admin-table td {

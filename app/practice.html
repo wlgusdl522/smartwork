@@ -33,8 +33,9 @@
 
   <div class="container">
     <h1 class="page-title">💻 실습자료</h1>
-    <p class="page-desc">실습 주제별로 프롬프트·코드를 확인하고, "실습 공유" 탭에서 내가 만든 결과물도 공유해보세요.</p>
+    <p class="page-desc">위에서 실습자료·실습공유를 선택하세요. 실습공유에는 사진도 올려서 다른 참가자들과 나눠보세요.</p>
 
+    <div class="tabs tabs-primary" id="mainTabBar"></div>
     <div class="tabs" id="tabBar"></div>
     <div class="tabs" id="subTabBar" style="margin-top:-8px;"></div>
     <div id="adminAddWrap"></div>
@@ -53,10 +54,10 @@
 <script src="js/supabase-client.js"></script>
 <script src="js/common.js"></script>
 <script>
-  var SHARE_TAB = '__share__';
   var IS_ADMIN = false;
   var ALL_ITEMS = [];
   var TOPICS = [];
+  var mainTab = 'materials';
   var activeTab = '';
   var activeSubTab = '';
   var editingId = null;
@@ -80,9 +81,25 @@
       TOPICS = topicsRes.data || [];
       ALL_ITEMS = itemsRes.data || [];
       var stillValid = TOPICS.some(function (t) { return t.id === activeTab; });
-      if (activeTab !== SHARE_TAB && !stillValid) activeTab = TOPICS.length ? TOPICS[0].id : '';
-      renderTabs();
+      if (!stillValid) activeTab = TOPICS.length ? TOPICS[0].id : '';
+      renderMainTabs();
       renderActiveTab();
+    });
+  }
+
+  function renderMainTabs() {
+    var bar = document.getElementById('mainTabBar');
+    bar.innerHTML =
+      '<button class="tab-btn' + (mainTab === 'materials' ? ' active' : '') + '" data-main="materials">💻 실습자료</button>' +
+      '<button class="tab-btn' + (mainTab === 'share' ? ' active' : '') + '" data-main="share">🙌 실습공유</button>';
+    bar.querySelectorAll('[data-main]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        mainTab = btn.getAttribute('data-main');
+        editingId = null;
+        adding = false;
+        renderMainTabs();
+        renderActiveTab();
+      });
     });
   }
 
@@ -101,9 +118,13 @@
   }
 
   function renderActiveTab() {
-    if (activeTab === SHARE_TAB) {
+    if (mainTab === 'share') {
+      document.getElementById('tabBar').innerHTML = '';
+      document.getElementById('subTabBar').innerHTML = '';
+      document.getElementById('adminAddWrap').innerHTML = '';
       renderShareTab();
     } else {
+      renderTabs();
       renderAddForm();
       renderItems();
     }
@@ -157,16 +178,15 @@
       }
       return html;
     }).join('') +
-      (IS_ADMIN ? '<button class="tab-btn" id="newTopicBtn" style="border-style:dashed;">+ 주제 만들기</button>' : '') +
-      '<button class="tab-btn' + (activeTab === SHARE_TAB ? ' active' : '') + '" data-cat="' + SHARE_TAB + '">🙌 실습 공유</button>';
+      (IS_ADMIN ? '<button class="tab-btn" id="newTopicBtn" style="border-style:dashed;">+ 주제 만들기</button>' : '');
     bar.querySelectorAll('.tab-btn[data-cat]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var cat = btn.getAttribute('data-cat');
-        activeTab = (cat === SHARE_TAB) ? SHARE_TAB : Number(cat);
+        activeTab = Number(btn.getAttribute('data-cat'));
         activeSubTab = '';
         editingId = null;
         renderTabs();
-        renderActiveTab();
+        renderAddForm();
+        renderItems();
       });
     });
     var newTopicBtn = document.getElementById('newTopicBtn');
@@ -178,50 +198,81 @@
     if (delTopicBtn) delTopicBtn.addEventListener('click', deleteActiveTopic);
   }
 
-  function shareListHtml(rows) {
+  function shareGalleryHtml(rows) {
     if (!rows.length) return '<div class="empty-state">아직 공유된 실습이 없습니다. 첫 실습을 공유해보세요!</div>';
-    return rows.map(function (s) {
-      return '<div class="list-item">' +
+    return '<div class="masonry">' + rows.map(function (s) {
+      var imgHtml = s.image_url ? '<img src="' + escapeHtml(s.image_url) + '" alt="" loading="lazy">' : '';
+      return '<div class="masonry-item">' + imgHtml +
+        '<div style="padding:14px;">' +
         '<div class="title">' + escapeHtml(s.name || '익명') + '</div>' +
         '<div class="date">' + escapeHtml(s.created_at ? s.created_at.slice(0, 10) : '') + '</div>' +
-        '<p style="margin:8px 0 0;">' + escapeHtml(s.content) + '</p>' +
-        (s.link ? '<div style="margin-top:6px;"><a href="' + escapeHtml(s.link) + '" target="_blank" rel="noopener">🔗 결과물 보기</a></div>' : '') +
+        '<p style="margin:8px 0 0;white-space:pre-wrap;">' + escapeHtml(s.content) + '</p>' +
+        (s.link ? '<div style="margin-top:8px;"><a href="' + escapeHtml(s.link) + '" target="_blank" rel="noopener">🔗 결과물 보기</a></div>' : '') +
         (IS_ADMIN ? '<div style="margin-top:8px;"><button class="btn small danger share-del-btn" data-id="' + s.id + '">삭제</button></div>' : '') +
-        '</div>';
-    }).join('');
+        '</div></div>';
+    }).join('') + '</div>';
+  }
+
+  function uploadSharePhoto(file) {
+    var ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    var path = Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext;
+    return sb.storage.from('practice-share').upload(path, file).then(function (res) {
+      if (res.error) throw res.error;
+      return sb.storage.from('practice-share').getPublicUrl(path).data.publicUrl;
+    });
   }
 
   function renderShareTab() {
-    document.getElementById('subTabBar').innerHTML = '';
-    document.getElementById('adminAddWrap').innerHTML = '';
     var wrap = document.getElementById('itemList');
     var formHtml = '<div class="card" style="margin-bottom:20px;">' +
       '<label>이름 (선택)</label><input type="text" id="shareName">' +
       '<label>공유 내용 *</label><textarea id="shareContent" placeholder="오늘 실습하면서 만든 결과물을 자유롭게 공유해보세요"></textarea>' +
+      '<label>사진 (선택)</label><input type="file" id="sharePhoto" accept="image/*">' +
+      '<div id="sharePreviewWrap" style="margin-top:8px;"></div>' +
       '<label>링크 (선택)</label><input type="text" id="shareLink" placeholder="결과물 링크가 있다면 남겨주세요">' +
       '<div style="margin-top:14px;"><button class="btn accent" id="shareSubmitBtn">공유하기</button></div>' +
       '</div>';
 
     wrap.innerHTML = formHtml + (SHARE_ROWS === null
       ? '<div class="loading-row"><span class="spinner"></span> 불러오는 중...</div>'
-      : shareListHtml(SHARE_ROWS));
+      : shareGalleryHtml(SHARE_ROWS));
+
+    var photoInput = document.getElementById('sharePhoto');
+    photoInput.addEventListener('change', function () {
+      var previewWrap = document.getElementById('sharePreviewWrap');
+      var file = photoInput.files[0];
+      previewWrap.innerHTML = file ? '<img src="' + URL.createObjectURL(file) + '" style="max-width:160px;border-radius:10px;display:block;">' : '';
+    });
 
     document.getElementById('shareSubmitBtn').addEventListener('click', function () {
       var content = document.getElementById('shareContent').value.trim();
       if (!content) { showToast('공유할 내용을 입력해주세요.'); return; }
+      var file = photoInput.files[0];
       var btn = this;
       btn.disabled = true;
-      sb.from('실습공유').insert({
-        name: document.getElementById('shareName').value.trim(),
-        content: content,
-        link: document.getElementById('shareLink').value.trim()
-      }).then(function (r) {
-        btn.disabled = false;
-        if (r.error) { showToast('등록 실패: ' + r.error.message); return; }
-        showToast('공유되었습니다!');
-        SHARE_ROWS = null;
-        loadShare();
-      });
+      btn.textContent = file ? '사진 올리는 중...' : '공유하는 중...';
+      (file ? uploadSharePhoto(file) : Promise.resolve(''))
+        .then(function (imageUrl) {
+          return sb.from('실습공유').insert({
+            name: document.getElementById('shareName').value.trim(),
+            content: content,
+            link: document.getElementById('shareLink').value.trim(),
+            image_url: imageUrl
+          });
+        })
+        .then(function (r) {
+          btn.disabled = false;
+          btn.textContent = '공유하기';
+          if (r.error) { showToast('등록 실패: ' + r.error.message); return; }
+          showToast('공유되었습니다!');
+          SHARE_ROWS = null;
+          loadShare();
+        })
+        .catch(function (err) {
+          btn.disabled = false;
+          btn.textContent = '공유하기';
+          showToast('사진 업로드 실패: ' + err.message);
+        });
     });
 
     if (SHARE_ROWS === null) {
@@ -254,7 +305,7 @@
 
   function fieldsForm(prefix, item) {
     item = item || {};
-    var selectedTopicId = item.topic_id != null ? item.topic_id : (activeTab !== SHARE_TAB ? activeTab : (TOPICS[0] && TOPICS[0].id));
+    var selectedTopicId = item.topic_id != null ? item.topic_id : activeTab;
     var topicOptions = TOPICS.map(function (t) {
       return '<option value="' + t.id + '"' + (t.id === selectedTopicId ? ' selected' : '') + '>' + escapeHtml(t.title) + '</option>';
     }).join('');
