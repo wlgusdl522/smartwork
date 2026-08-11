@@ -159,7 +159,7 @@
       body.innerHTML = '<div class="empty-state">' + cfg.emptyMsg + '</div>';
       return;
     }
-    body.innerHTML = '<div class="grid ' + cfg.gridClass + '">' + rows.map(function (row) {
+    body.innerHTML = '<div class="grid ' + cfg.gridClass + '">' + rows.map(function (row, idx) {
       if (editingId === row.id) {
         return '<div class="card">' + fieldsForm(cfg, 'edit' + row.id, row) +
           '<div style="margin-top:12px;"><button class="btn small save-edit-btn" data-id="' + row.id + '">저장</button> <button class="btn small secondary cancel-edit-btn">취소</button></div></div>';
@@ -172,12 +172,20 @@
         '<div style="font-weight:800;margin-top:8px;">' + escapeHtml(row[cfg.nameField]) + '</div>' +
         '<p style="color:var(--text-mute);font-size:14px;margin:6px 0 14px;">' + escapeHtml(row.description) + '</p>' +
         '<a class="' + cfg.linkBtnClass + '" href="' + escapeHtml(row.link) + '" target="_blank" rel="noopener">' + cfg.linkLabel + '</a>' +
-        (IS_ADMIN ? '<div style="margin-top:10px;"><button class="btn small edit-btn" data-id="' + row.id + '">수정</button> <button class="btn small danger del-btn" data-id="' + row.id + '">삭제</button></div>' : '') +
+        (IS_ADMIN ? '<div style="margin-top:10px;">' +
+          '<button class="btn small secondary move-btn" data-idx="' + idx + '" data-dir="left" title="앞으로 이동"' + (idx === 0 ? ' disabled' : '') + '>◀</button> ' +
+          '<button class="btn small secondary move-btn" data-idx="' + idx + '" data-dir="right" title="뒤로 이동"' + (idx === rows.length - 1 ? ' disabled' : '') + '>▶</button> ' +
+          '<button class="btn small edit-btn" data-id="' + row.id + '">수정</button> <button class="btn small danger del-btn" data-id="' + row.id + '">삭제</button></div>' : '') +
         '</div>';
     }).join('') + '</div>';
 
     if (editingId != null) bindIconPicker('edit' + editingId);
 
+    body.querySelectorAll('.move-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        moveItem(rows, Number(btn.getAttribute('data-idx')), btn.getAttribute('data-dir'));
+      });
+    });
     body.querySelectorAll('.edit-btn').forEach(function (btn) {
       btn.addEventListener('click', function () { editingId = Number(btn.getAttribute('data-id')); renderList(); });
     });
@@ -212,6 +220,24 @@
           loadTab();
         });
       });
+    });
+  }
+
+  function moveItem(rows, idx, direction) {
+    var cfg = TABS[activeTab];
+    var swapWith = direction === 'left' ? idx - 1 : idx + 1;
+    if (idx < 0 || swapWith < 0 || swapWith >= rows.length) return;
+    var reordered = rows.slice();
+    var tmp = reordered[idx];
+    reordered[idx] = reordered[swapWith];
+    reordered[swapWith] = tmp;
+    Promise.all(reordered.map(function (row, i) {
+      return sb.from(cfg.table).update({ sort_order: i }).eq('id', row.id);
+    })).then(function (results) {
+      var failed = results.filter(function (r) { return r && r.error; })[0];
+      if (failed) { showToast('순서 변경 실패: ' + failed.error.message); return; }
+      delete CACHE[activeTab];
+      loadTab();
     });
   }
 
