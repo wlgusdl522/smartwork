@@ -1,21 +1,17 @@
 // 질문 또는 의견이 새로 등록되면 관리자(kwonzihyun@sdmsenior.or.kr)에게 이메일로 알림을 보내는 Supabase Edge Function.
+// Resend(https://resend.com) API로 메일을 보냅니다 - JSON으로 보내면 인코딩은 Resend가 알아서 처리해줍니다.
 //
 // 설치 방법
-// 1) Supabase 대시보드 > Edge Functions > Create a new function, 이름은 notify-admin 으로 만들고 이 파일 내용을 붙여넣어 Deploy 합니다.
+// 1) Supabase 대시보드 > Edge Functions > notify-admin 함수 코드를 이 파일 내용으로 교체하고 Deploy 합니다.
 // 2) 같은 화면(또는 Project Settings > Edge Functions > Secrets)에서 아래 비밀값을 등록합니다.
-//      GMAIL_USER = kwonzihyun@sdmsenior.or.kr
-//      GMAIL_APP_PASSWORD = (구글 계정 2단계 인증 후 myaccount.google.com/apppasswords 에서 발급받은 16자리 앱 비밀번호, 공백 없이)
+//      RESEND_API_KEY = (resend.com에서 발급받은 API 키, re_ 로 시작)
 // 3) Database > Extensions 에서 pg_net을 활성화하고, app/sql/add_notify_triggers.sql 을 SQL Editor에서 실행합니다.
 //    (질문/의견 테이블에 insert가 생기면 pg_net이 이 함수를 직접 호출하는 트리거가 만들어집니다.)
 
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
+const NOTIFY_TO = Deno.env.get("NOTIFY_TO") || "kwonzihyun@sdmsenior.or.kr";
+const FROM_ADDRESS = "SmartWork 알림 <onboarding@resend.dev>";
 
-const GMAIL_USER = Deno.env.get("GMAIL_USER")!;
-const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD")!;
-const NOTIFY_TO = Deno.env.get("NOTIFY_TO") || GMAIL_USER;
-
-// denomailer의 제목(subject) 인코딩(quotedPrintableEncodeInline)은 공백을 제대로 처리하지 못해
-// 한글 제목에 띄어쓰기가 있으면 깨집니다. 그래서 제목에는 띄어쓰기를 쓰지 않습니다. (본문은 문제 없음)
 function buildEmail(table: string, record: Record<string, unknown>) {
   if (table === "질문") {
     const wantsAnswer = record.wants_answer ? "예" : "아니오";
@@ -23,12 +19,12 @@ function buildEmail(table: string, record: Record<string, unknown>) {
       ? `\n소속: ${record.affiliation ?? ""}\n이름: ${record.name ?? ""}\n연락처: ${record.contact ?? ""}\n이메일: ${record.email ?? ""}`
       : "";
     return {
-      subject: "[스마트워크강의]새질문등록",
+      subject: "[스마트워크 강의] 새 질문이 등록되었습니다",
       text: `질문 내용:\n${record.content}\n\n개별 답변 요청: ${wantsAnswer}${contact}`,
     };
   }
   return {
-    subject: "[스마트워크강의]새의견등록",
+    subject: "[스마트워크 강의] 새 의견이 등록되었습니다",
     text: `의견 내용:\n${record.content}\n\n소속: ${record.affiliation ?? ""}\n이름: ${record.name ?? ""}\n연락처: ${record.contact ?? ""}\n이메일: ${record.email ?? ""}`,
   };
 }
@@ -44,22 +40,25 @@ Deno.serve(async (req) => {
 
     const { subject, text } = buildEmail(table, record);
 
-    const client = new SMTPClient({
-      connection: {
-        hostname: "smtp.gmail.com",
-        port: 465,
-        tls: true,
-        auth: { username: GMAIL_USER, password: GMAIL_APP_PASSWORD },
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({
+        from: FROM_ADDRESS,
+        to: [NOTIFY_TO],
+        subject,
+        text,
+      }),
     });
 
-    await client.send({
-      from: GMAIL_USER,
-      to: NOTIFY_TO,
-      subject,
-      content: text,
-    });
-    await client.close();
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error("Resend error:", errText);
+      return new Response(`resend error: ${errText}`, { status: 500 });
+    }
 
     return new Response("sent", { status: 200 });
   } catch (err) {
