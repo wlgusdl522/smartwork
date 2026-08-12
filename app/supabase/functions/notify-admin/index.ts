@@ -14,13 +14,8 @@ const GMAIL_USER = Deno.env.get("GMAIL_USER")!;
 const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD")!;
 const NOTIFY_TO = Deno.env.get("NOTIFY_TO") || GMAIL_USER;
 
-// 메일 제목에 한글 등 non-ASCII가 있으면 RFC 2047 형식으로 인코딩해야 깨지지 않습니다.
-function encodeSubject(subject: string): string {
-  const bytes = new TextEncoder().encode(subject);
-  const base64 = btoa(String.fromCharCode(...bytes));
-  return `=?UTF-8?B?${base64}?=`;
-}
-
+// 메일 제목에 한글을 넣으면 라이브러리에서 인코딩이 깨지는 문제가 있어, 제목은 영문으로 고정하고
+// 한글 내용은 본문에 넣습니다.
 function buildEmail(table: string, record: Record<string, unknown>) {
   if (table === "질문") {
     const wantsAnswer = record.wants_answer ? "예" : "아니오";
@@ -28,12 +23,12 @@ function buildEmail(table: string, record: Record<string, unknown>) {
       ? `\n소속: ${record.affiliation ?? ""}\n이름: ${record.name ?? ""}\n연락처: ${record.contact ?? ""}\n이메일: ${record.email ?? ""}`
       : "";
     return {
-      subject: "[스마트워크 강의] 새 질문이 등록되었습니다",
+      subject: "[SmartWork Lecture] New question submitted",
       text: `질문 내용:\n${record.content}\n\n개별 답변 요청: ${wantsAnswer}${contact}`,
     };
   }
   return {
-    subject: "[스마트워크 강의] 새 의견이 등록되었습니다",
+    subject: "[SmartWork Lecture] New feedback submitted",
     text: `의견 내용:\n${record.content}\n\n소속: ${record.affiliation ?? ""}\n이름: ${record.name ?? ""}\n연락처: ${record.contact ?? ""}\n이메일: ${record.email ?? ""}`,
   };
 }
@@ -61,7 +56,7 @@ Deno.serve(async (req) => {
     await client.send({
       from: GMAIL_USER,
       to: NOTIFY_TO,
-      subject: encodeSubject(subject),
+      subject,
       content: text,
     });
     await client.close();
