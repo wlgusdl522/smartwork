@@ -14,8 +14,8 @@ const GMAIL_USER = Deno.env.get("GMAIL_USER")!;
 const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD")!;
 const NOTIFY_TO = Deno.env.get("NOTIFY_TO") || GMAIL_USER;
 
-// 메일 제목에 한글을 넣으면 라이브러리에서 인코딩이 깨지는 문제가 있어, 제목은 영문으로 고정하고
-// 한글 내용은 본문에 넣습니다.
+// denomailer의 제목(subject) 인코딩(quotedPrintableEncodeInline)은 공백을 제대로 처리하지 못해
+// 한글 제목에 띄어쓰기가 있으면 깨집니다. 그래서 제목에는 띄어쓰기를 쓰지 않습니다. (본문은 문제 없음)
 function buildEmail(table: string, record: Record<string, unknown>) {
   if (table === "질문") {
     const wantsAnswer = record.wants_answer ? "예" : "아니오";
@@ -23,12 +23,12 @@ function buildEmail(table: string, record: Record<string, unknown>) {
       ? `\n소속: ${record.affiliation ?? ""}\n이름: ${record.name ?? ""}\n연락처: ${record.contact ?? ""}\n이메일: ${record.email ?? ""}`
       : "";
     return {
-      subject: "[SmartWork Lecture] New question submitted",
+      subject: "[스마트워크강의]새질문등록",
       text: `질문 내용:\n${record.content}\n\n개별 답변 요청: ${wantsAnswer}${contact}`,
     };
   }
   return {
-    subject: "[SmartWork Lecture] New feedback submitted",
+    subject: "[스마트워크강의]새의견등록",
     text: `의견 내용:\n${record.content}\n\n소속: ${record.affiliation ?? ""}\n이름: ${record.name ?? ""}\n연락처: ${record.contact ?? ""}\n이메일: ${record.email ?? ""}`,
   };
 }
