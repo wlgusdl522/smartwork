@@ -23,9 +23,17 @@ function buildEmail(table: string, record: Record<string, unknown>) {
       text: `질문 내용:\n${record.content}\n\n개별 답변 요청: ${wantsAnswer}${contact}`,
     };
   }
+  // 의견 테이블에는 wants_answer 컬럼이 없어서, 연락처 항목이 하나라도 채워져 있으면
+  // "답변을 받고 싶습니다"를 체크한 것으로 판단합니다 (체크 안 하면 feedback.html에서 빈 문자열로 저장됨).
+  const hasContact = [record.affiliation, record.name, record.contact, record.email].some(
+    (v) => typeof v === "string" && v.trim() !== "",
+  );
+  const contact = hasContact
+    ? `\n\n소속: ${record.affiliation ?? ""}\n이름: ${record.name ?? ""}\n연락처: ${record.contact ?? ""}\n이메일: ${record.email ?? ""}`
+    : "";
   return {
     subject: "[스마트워크 강의] 새 의견이 등록되었습니다",
-    text: `의견 내용:\n${record.content}\n\n소속: ${record.affiliation ?? ""}\n이름: ${record.name ?? ""}\n연락처: ${record.contact ?? ""}\n이메일: ${record.email ?? ""}`,
+    text: `의견 내용:\n${record.content}${contact}`,
   };
 }
 
