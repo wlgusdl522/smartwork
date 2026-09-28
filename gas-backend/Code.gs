@@ -2,16 +2,15 @@
 // 웹사이트(Vercel)가 이 Apps Script 웹앱에 데이터를 요청하면, 스프레드시트의 각 시트를 표처럼 읽고 씁니다.
 // 시트 이름 = 예전 Supabase 테이블 이름, 1행 = 열 이름(영문 키). 열 순서는 바꿔도 되지만 1행 이름은 바꾸지 마세요.
 //
-// 설치 방법
-// 1) 새 구글 스프레드시트를 만들고 확장 프로그램 > Apps Script 에 이 파일(Code.gs)과 appsscript.json 내용을 붙여넣습니다.
-//    (clasp 사용 시: 이 폴더에서 clasp create --type sheets --title "스마트워크 DB" 후 clasp push)
-// 2) 프로젝트 설정 > 스크립트 속성에 추가합니다.
-//      ADMIN_PASSWORD = 관리자 페이지 비밀번호
-//      SUPABASE_SERVICE_KEY = (선택) Supabase service_role 키 - '의견' 데이터까지 옮기려면 필요, 옮긴 뒤 삭제하세요.
-// 3) 편집기에서 importFromSupabase 함수를 한 번 실행합니다. (시트 생성 + 기존 데이터/사진 복사, 권한 승인 필요)
+// 설치 방법 (처음 한 번)
+// 1) 새 구글 스프레드시트의 확장 프로그램 > Apps Script 에 이 파일(Code.gs)과 appsscript.json 을 넣습니다.
+//    (clasp 사용 시: clasp create --type sheets --title "스마트워크 DB" 후 clasp push)
+// 2) 프로젝트 설정 > 스크립트 속성에 ADMIN_PASSWORD(관리자 페이지 비밀번호)를 추가합니다.
+// 3) 편집기에서 setup 함수를 한 번 실행합니다. (시트와 1행 열 이름 생성, 권한 승인 필요)
 // 4) 배포 > 새 배포 > 유형 "웹 앱", 실행 사용자 "나", 액세스 권한 "모든 사용자" 로 배포하고
 //    나온 URL(…/exec)을 app/js/sheet-client.js 의 SHEET_API_URL 에 넣습니다.
-//    코드를 고친 뒤에는 배포 > 배포 관리 > 수정 > 버전 "새 버전" 으로 해야 반영됩니다(URL 유지).
+//
+// 코드를 고친 뒤에는 clasp push 후 배포 > 배포 관리 > 수정 > 버전 "새 버전" 으로 해야 반영됩니다(URL 유지).
 
 var SCHEMA = {
   '설정': { id: 'int', course_name: 'text', instructor_name: 'text', instructor_contact: 'text', intro: 'text',
@@ -107,7 +106,7 @@ function checkTable_(table) {
 // ------------------------------------------------------------------
 function getSheet_(table) {
   var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(table);
-  if (!sh) fail_('시트를 찾을 수 없습니다: ' + table + ' (importFromSupabase 또는 setup을 먼저 실행하세요)');
+  if (!sh) fail_('시트를 찾을 수 없습니다: ' + table + ' (setup을 먼저 실행하세요)');
   return sh;
 }
 
@@ -437,7 +436,7 @@ function notify_(table, r) {
 }
 
 // ------------------------------------------------------------------
-// 최초 설정 / Supabase 데이터 가져오기 (편집기에서 직접 실행)
+// 최초 설정 (편집기에서 직접 실행)
 // ------------------------------------------------------------------
 
 // 없는 시트만 만들고 1행에 열 이름을 넣습니다. 이미 있는 시트는 건드리지 않습니다.
@@ -456,49 +455,4 @@ function setup() {
     var sh1 = ss.getSheetByName('설정');
     writeRow_(sh1, 2, headerOf_(sh1), '설정', { id: 1 });
   }
-}
-
-var SUPABASE_URL = 'https://gaivwuzeafxeecgcidfr.supabase.co';
-var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdhaXZ3dXplYWZ4ZWVjZ2NpZGZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMTMyNjMsImV4cCI6MjEwMDY4OTI2M30.Nu7pYV9tvqZjReppD7MAzgGaRs2XDmZ_xmEQ5zvnUJA';
-
-// Supabase의 모든 테이블을 같은 이름의 시트로 복사합니다. (시트 내용을 덮어씀 - 옮길 때 한 번만 실행)
-// 실습공유 사진은 Supabase Storage에서 내려받아 드라이브 폴더로 옮기고 주소를 바꿉니다.
-function importFromSupabase() {
-  setup();
-  var serviceKey = PropertiesService.getScriptProperties().getProperty('SUPABASE_SERVICE_KEY');
-  var key = serviceKey || SUPABASE_ANON_KEY;
-
-  Object.keys(SCHEMA).forEach(function (table) {
-    if (table === '의견' && !serviceKey) {
-      console.log('의견: SUPABASE_SERVICE_KEY가 없어 건너뜀 (관리자만 읽을 수 있는 테이블)');
-      return;
-    }
-    var res = UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/' + encodeURIComponent(table) + '?select=*&order=id.asc', {
-      headers: { apikey: key, Authorization: 'Bearer ' + key },
-      muteHttpExceptions: true
-    });
-    if (res.getResponseCode() !== 200) {
-      console.log(table + ': 가져오기 실패 ' + res.getContentText());
-      return;
-    }
-    var rows = JSON.parse(res.getContentText());
-
-    rows.forEach(function (r) {
-      if (table === '질문' && !r.edit_token) r.edit_token = Utilities.getUuid();
-      if (table === '실습공유' && r.image_url && r.image_url.indexOf(SUPABASE_URL) === 0) {
-        try {
-          var blob = UrlFetchApp.fetch(r.image_url).getBlob().setName(r.image_url.split('/').pop());
-          r.image_url = savePhoto_(blob);
-        } catch (err) {
-          console.log('사진 복사 실패 (' + r.image_url + '): ' + err.message);
-        }
-      }
-    });
-
-    var sh = getSheet_(table);
-    var header = headerOf_(sh);
-    if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();
-    rows.forEach(function (r, i) { writeRow_(sh, i + 2, header, table, r); });
-    console.log(table + ': ' + rows.length + '행 복사');
-  });
 }
