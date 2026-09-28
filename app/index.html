@@ -75,13 +75,12 @@
   </footer>
 </div>
 <div id="toast"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="js/supabase-client.js"></script>
+<script src="js/sheet-client.js"></script>
 <script src="js/common.js"></script>
 <script>
   Promise.all([
-    sb.from('설정').select('*').eq('id', 1).single(),
-    sb.from('공지사항').select('*').eq('is_visible', true).order('created_at', { ascending: false }).limit(3)
+    db.from('설정').select('*').eq('id', 1).single(),
+    db.from('공지사항').select('*').eq('is_visible', true).order('created_at', { ascending: false }).limit(3)
   ]).then(function (results) {
     var s = results[0].data || {};
     document.getElementById('homeTitle').textContent = s.course_name || '스마트워크 강의자료';

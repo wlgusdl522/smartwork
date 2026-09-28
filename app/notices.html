@@ -48,8 +48,7 @@
   </footer>
 </div>
 <div id="toast"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="js/supabase-client.js"></script>
+<script src="js/sheet-client.js"></script>
 <script src="js/common.js"></script>
 <script>
   var IS_ADMIN = false;
@@ -74,7 +73,7 @@
   function load() {
     getIsAdmin().then(function (isAdmin) {
       IS_ADMIN = isAdmin;
-      return sb.from('공지사항').select('*').order('created_at', { ascending: false });
+      return db.from('공지사항').select('*').order('created_at', { ascending: false });
     }).then(function (res) {
       if (res.error) {
         document.getElementById('noticeWrap').innerHTML = '<div class="empty-state">불러오기 실패: ' + escapeHtml(res.error.message) + '</div>';
@@ -118,7 +117,7 @@
       var title = document.getElementById('newTitle').value.trim();
       var content = document.getElementById('newContent').value.trim();
       if (!title || !content) { showToast('제목과 내용을 입력해주세요.'); return; }
-      sb.from('공지사항').insert({ title: title, content: content, is_visible: document.getElementById('newVisible').checked }).then(function (r) {
+      db.from('공지사항').insert({ title: title, content: content, is_visible: document.getElementById('newVisible').checked }).then(function (r) {
         if (r.error) { showToast('등록 실패: ' + r.error.message); return; }
         showToast('등록되었습니다.');
         adding = false;
@@ -168,7 +167,7 @@
         var content = document.getElementById('editContent_' + n.id).value.trim();
         var visible = document.getElementById('editVisible_' + n.id).checked;
         if (!title || !content) { showToast('제목과 내용을 입력해주세요.'); return; }
-        sb.from('공지사항').update({ title: title, content: content, is_visible: visible }).eq('id', n.id).then(function (r) {
+        db.from('공지사항').update({ title: title, content: content, is_visible: visible }).eq('id', n.id).then(function (r) {
           if (r.error) { showToast('저장 실패: ' + r.error.message); return; }
           showToast('저장되었습니다.');
           editingId = null;
@@ -193,7 +192,7 @@
     var delBtn = wrap.querySelector('.del-btn');
     if (delBtn) delBtn.addEventListener('click', function () {
       if (!confirm('정말 삭제하시겠습니까?')) return;
-      sb.from('공지사항').delete().eq('id', n.id).then(function (r) {
+      db.from('공지사항').delete().eq('id', n.id).then(function (r) {
         if (r.error) { showToast('삭제 실패: ' + r.error.message); return; }
         showToast('삭제되었습니다.');
         navigateTo(null);

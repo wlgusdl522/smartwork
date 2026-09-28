@@ -52,8 +52,7 @@
   </footer>
 </div>
 <div id="toast"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="js/supabase-client.js"></script>
+<script src="js/sheet-client.js"></script>
 <script src="js/common.js"></script>
 <script>
   var TABS = {
@@ -141,7 +140,7 @@
       obj.description = document.getElementById('newDesc').value.trim();
       obj.link = document.getElementById('newLink').value.trim();
       if (cfg.hasIcon) obj.icon = iconValue('new');
-      sb.from(cfg.table).insert(obj).then(function (r) {
+      db.from(cfg.table).insert(obj).then(function (r) {
         if (r.error) { showToast('등록 실패: ' + r.error.message); return; }
         showToast('등록되었습니다.');
         adding = false;
@@ -201,7 +200,7 @@
         obj.description = document.getElementById(p + 'Desc').value.trim();
         obj.link = document.getElementById(p + 'Link').value.trim();
         if (cfg.hasIcon) obj.icon = iconValue(p);
-        sb.from(cfg.table).update(obj).eq('id', id).then(function (r) {
+        db.from(cfg.table).update(obj).eq('id', id).then(function (r) {
           if (r.error) { showToast('저장 실패: ' + r.error.message); return; }
           showToast('저장되었습니다.');
           editingId = null;
@@ -213,7 +212,7 @@
     body.querySelectorAll('.del-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
         if (!confirm('정말 삭제하시겠습니까?')) return;
-        sb.from(cfg.table).delete().eq('id', Number(btn.getAttribute('data-id'))).then(function (r) {
+        db.from(cfg.table).delete().eq('id', Number(btn.getAttribute('data-id'))).then(function (r) {
           if (r.error) { showToast('삭제 실패: ' + r.error.message); return; }
           showToast('삭제되었습니다.');
           delete CACHE[activeTab];
@@ -232,7 +231,7 @@
     reordered[idx] = reordered[swapWith];
     reordered[swapWith] = tmp;
     Promise.all(reordered.map(function (row, i) {
-      return sb.from(cfg.table).update({ sort_order: i }).eq('id', row.id);
+      return db.from(cfg.table).update({ sort_order: i }).eq('id', row.id);
     })).then(function (results) {
       var failed = results.filter(function (r) { return r && r.error; })[0];
       if (failed) { showToast('순서 변경 실패: ' + failed.error.message); return; }
@@ -246,7 +245,7 @@
     var cfg = TABS[activeTab];
     if (CACHE[activeTab]) { renderList(); return; }
     document.getElementById('tabBody').innerHTML = '<div class="loading-row"><span class="spinner"></span> 불러오는 중...</div>';
-    sb.from(cfg.table).select('*').order('sort_order', { ascending: true }).then(function (res) {
+    db.from(cfg.table).select('*').order('sort_order', { ascending: true }).then(function (res) {
       if (res.error) {
         document.getElementById('tabBody').innerHTML = '<div class="empty-state">불러오기 실패: ' + escapeHtml(res.error.message) + '</div>';
         return;

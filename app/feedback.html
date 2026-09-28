@@ -69,8 +69,7 @@
   </footer>
 </div>
 <div id="toast"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="js/supabase-client.js"></script>
+<script src="js/sheet-client.js"></script>
 <script src="js/common.js"></script>
 <script>
   document.getElementById('fWantAnswer').addEventListener('change', function () {
@@ -90,7 +89,7 @@
     };
     var btn = this;
     btn.disabled = true;
-    sb.from('의견').insert(form).then(function (res) {
+    db.from('의견').insert(form).then(function (res) {
       btn.disabled = false;
       if (res.error) {
         showToast('등록 실패: ' + res.error.message);
@@ -109,7 +108,7 @@
     var wrap = document.getElementById('adminFeedbackWrap');
     getIsAdmin().then(function (isAdmin) {
       if (!isAdmin) { wrap.innerHTML = ''; return; }
-      sb.from('의견').select('*').order('created_at', { ascending: false }).then(function (res) {
+      db.from('의견').select('*').order('created_at', { ascending: false }).then(function (res) {
         if (res.error) { wrap.innerHTML = ''; return; }
         var rows = res.data || [];
         var html = '<h2 style="margin-top:36px;font-size:18px;">📮 등록된 의견 (관리자 전용)</h2><div class="card">';
@@ -132,7 +131,7 @@
         wrap.querySelectorAll('.feedback-del-btn').forEach(function (btn) {
           btn.addEventListener('click', function () {
             if (!confirm('정말 삭제하시겠습니까?')) return;
-            sb.from('의견').delete().eq('id', Number(btn.getAttribute('data-id'))).then(function (r) {
+            db.from('의견').delete().eq('id', Number(btn.getAttribute('data-id'))).then(function (r) {
               if (r.error) { showToast('삭제 실패: ' + r.error.message); return; }
               showToast('삭제되었습니다.');
               loadAdminFeedback();

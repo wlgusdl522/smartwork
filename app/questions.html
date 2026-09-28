@@ -73,8 +73,7 @@
   </footer>
 </div>
 <div id="toast"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="js/supabase-client.js"></script>
+<script src="js/sheet-client.js"></script>
 <script src="js/common.js"></script>
 <script>
   document.getElementById('qWantAnswer').addEventListener('change', function () {
@@ -104,14 +103,22 @@
   function loadBoard() {
     getIsAdmin().then(function (isAdmin) {
       IS_ADMIN = isAdmin;
-      return sb.from('질문').select('*, 답변(*)').order('created_at', { ascending: false });
-    }).then(function (res) {
+      return Promise.all([
+        db.from('질문').select('*').order('created_at', { ascending: false }),
+        db.from('답변').select('*')
+      ]);
+    }).then(function (results) {
       var wrap = document.getElementById('boardWrap');
-      if (res.error) {
-        wrap.innerHTML = '<div class="empty-state">불러오기 실패: ' + escapeHtml(res.error.message) + '</div>';
+      var err = results[0].error || results[1].error;
+      if (err) {
+        wrap.innerHTML = '<div class="empty-state">불러오기 실패: ' + escapeHtml(err.message) + '</div>';
         return;
       }
-      ROWS = res.data || [];
+      var answers = results[1].data || [];
+      ROWS = (results[0].data || []).map(function (q) {
+        q['답변'] = answers.filter(function (a) { return a.question_id === q.id; });
+        return q;
+      });
       renderBoard();
     });
   }
@@ -186,8 +193,8 @@
         var newContent = document.getElementById('editQContent_' + id).value.trim();
         if (!newContent) { showToast('내용을 입력해주세요.'); return; }
         var request = IS_ADMIN
-          ? sb.from('질문').update({ content: newContent }).eq('id', id)
-          : sb.rpc('update_own_question', { q_id: id, token: getOwnToken(id), new_content: newContent });
+          ? db.from('질문').update({ content: newContent }).eq('id', id)
+          : db.rpc('update_own_question', { q_id: id, token: getOwnToken(id), new_content: newContent });
         request.then(function (r) {
           if (r.error) { showToast('저장 실패: ' + r.error.message); return; }
           showToast('저장되었습니다.');
@@ -201,8 +208,8 @@
         if (!confirm('이 질문을 삭제하시겠습니까? 답변도 함께 삭제됩니다.')) return;
         var id = Number(btn.getAttribute('data-id'));
         var request = IS_ADMIN
-          ? sb.from('질문').delete().eq('id', id)
-          : sb.rpc('delete_own_question', { q_id: id, token: getOwnToken(id) });
+          ? db.from('질문').delete().eq('id', id)
+          : db.rpc('delete_own_question', { q_id: id, token: getOwnToken(id) });
         request.then(function (r) {
           if (r.error) { showToast('삭제 실패: ' + r.error.message); return; }
           showToast('삭제되었습니다.');
@@ -217,7 +224,7 @@
         var qid = Number(btn.getAttribute('data-id'));
         var text = document.getElementById('answerText_' + qid).value;
         btn.disabled = true;
-        sb.from('답변').upsert({ question_id: qid, content: text }, { onConflict: 'question_id' }).then(function (r) {
+        db.from('답변').upsert({ question_id: qid, content: text }, { onConflict: 'question_id' }).then(function (r) {
           btn.disabled = false;
           if (r.error) { showToast('저장 실패: ' + r.error.message); return; }
           showToast('답변이 저장되었습니다.');
@@ -241,7 +248,7 @@
     };
     var btn = this;
     btn.disabled = true;
-    sb.from('질문').insert(form).select().then(function (res) {
+    db.from('질문').insert(form).select().then(function (res) {
       btn.disabled = false;
       if (res.error) {
         showToast('등록 실패: ' + res.error.message);

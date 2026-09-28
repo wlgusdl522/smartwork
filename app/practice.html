@@ -50,8 +50,7 @@
   </footer>
 </div>
 <div id="toast"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="js/supabase-client.js"></script>
+<script src="js/sheet-client.js"></script>
 <script src="js/common.js"></script>
 <script>
   var IS_ADMIN = false;
@@ -68,8 +67,8 @@
     getIsAdmin().then(function (isAdmin) {
       IS_ADMIN = isAdmin;
       return Promise.all([
-        sb.from('실습주제').select('*').order('sort_order', { ascending: true }),
-        sb.from('실습자료').select('*').order('sort_order', { ascending: true })
+        db.from('실습주제').select('*').order('sort_order', { ascending: true }),
+        db.from('실습자료').select('*').order('sort_order', { ascending: true })
       ]);
     }).then(function (results) {
       var topicsRes = results[0], itemsRes = results[1];
@@ -108,7 +107,7 @@
     if (title == null) return;
     title = title.trim();
     if (!title) return;
-    sb.from('실습주제').insert({ title: title, sort_order: TOPICS.length }).select().then(function (r) {
+    db.from('실습주제').insert({ title: title, sort_order: TOPICS.length }).select().then(function (r) {
       if (r.error) { showToast('주제 추가 실패: ' + r.error.message); return; }
       showToast('주제가 추가되었습니다.');
       activeTab = (r.data && r.data[0]) ? r.data[0].id : activeTab;
@@ -139,7 +138,7 @@
     reordered[idx] = reordered[swapWith];
     reordered[swapWith] = tmp;
     Promise.all(reordered.map(function (t, i) {
-      return sb.from('실습주제').update({ sort_order: i }).eq('id', t.id);
+      return db.from('실습주제').update({ sort_order: i }).eq('id', t.id);
     })).then(function (results) {
       var failed = results.filter(function (r) { return r && r.error; })[0];
       if (failed) { showToast('순서 변경 실패: ' + failed.error.message); return; }
@@ -151,7 +150,7 @@
     var topic = TOPICS.filter(function (t) { return t.id === activeTab; })[0];
     if (!topic) return;
     if (!confirm('"' + topic.title + '" 주제를 삭제하시겠습니까?')) return;
-    sb.from('실습주제').delete().eq('id', topic.id).then(function (r) {
+    db.from('실습주제').delete().eq('id', topic.id).then(function (r) {
       if (r.error) {
         if (r.error.code === '23503') {
           showToast('이 주제 안에 항목이 남아있어 삭제할 수 없어요. 먼저 안의 항목들을 삭제해주세요.');
@@ -214,12 +213,7 @@
   }
 
   function uploadSharePhoto(file) {
-    var ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-    var path = Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext;
-    return sb.storage.from('practice-share').upload(path, file).then(function (res) {
-      if (res.error) throw res.error;
-      return sb.storage.from('practice-share').getPublicUrl(path).data.publicUrl;
-    });
+    return db.uploadImage(file);
   }
 
   function renderShareTab() {
@@ -253,7 +247,7 @@
       btn.textContent = file ? '사진 올리는 중...' : '공유하는 중...';
       (file ? uploadSharePhoto(file) : Promise.resolve(''))
         .then(function (imageUrl) {
-          return sb.from('실습공유').insert({
+          return db.from('실습공유').insert({
             name: document.getElementById('shareName').value.trim(),
             content: content,
             link: document.getElementById('shareLink').value.trim(),
@@ -281,7 +275,7 @@
       wrap.querySelectorAll('.share-del-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
           if (!confirm('정말 삭제하시겠습니까?')) return;
-          sb.from('실습공유').delete().eq('id', Number(btn.getAttribute('data-id'))).then(function (r) {
+          db.from('실습공유').delete().eq('id', Number(btn.getAttribute('data-id'))).then(function (r) {
             if (r.error) { showToast('삭제 실패: ' + r.error.message); return; }
             showToast('삭제되었습니다.');
             SHARE_ROWS = null;
@@ -293,7 +287,7 @@
   }
 
   function loadShare() {
-    sb.from('실습공유').select('*').order('created_at', { ascending: false }).then(function (res) {
+    db.from('실습공유').select('*').order('created_at', { ascending: false }).then(function (res) {
       if (res.error) {
         document.getElementById('itemList').innerHTML = '<div class="empty-state">불러오기 실패: ' + escapeHtml(res.error.message) + '</div>';
         return;
@@ -333,7 +327,7 @@
       var topicId = Number(document.getElementById('newTopic').value);
       var category = document.getElementById('newCat').value.trim();
       if (!title || !topicId || !category) { showToast('주제·분류·제목을 입력해주세요.'); return; }
-      sb.from('실습자료').insert({
+      db.from('실습자료').insert({
         topic_id: topicId,
         category: category,
         title: title,
@@ -405,7 +399,7 @@
       topicItems.filter(function (i) { return String(i.category) === c; }).forEach(function (i) { newOrder.push(i); });
     });
     Promise.all(newOrder.map(function (item, i) {
-      return sb.from('실습자료').update({ sort_order: i }).eq('id', item.id);
+      return db.from('실습자료').update({ sort_order: i }).eq('id', item.id);
     })).then(function (results) {
       var failed = results.filter(function (r) { return r && r.error; })[0];
       if (failed) { showToast('순서 변경 실패: ' + failed.error.message); return; }
@@ -455,7 +449,7 @@
       btn.addEventListener('click', function () {
         var id = Number(btn.getAttribute('data-id'));
         var p = 'edit' + id;
-        sb.from('실습자료').update({
+        db.from('실습자료').update({
           topic_id: Number(document.getElementById(p + 'Topic').value),
           category: document.getElementById(p + 'Cat').value.trim(),
           title: document.getElementById(p + 'Title').value.trim(),
@@ -473,7 +467,7 @@
     wrap.querySelectorAll('.del-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
         if (!confirm('정말 삭제하시겠습니까?')) return;
-        sb.from('실습자료').delete().eq('id', Number(btn.getAttribute('data-id'))).then(function (r) {
+        db.from('실습자료').delete().eq('id', Number(btn.getAttribute('data-id'))).then(function (r) {
           if (r.error) { showToast('삭제 실패: ' + r.error.message); return; }
           showToast('삭제되었습니다.');
           load();

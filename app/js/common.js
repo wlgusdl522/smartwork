@@ -41,9 +41,8 @@ function copyText(text, btnEl) {
 }
 
 function getIsAdmin() {
-  return sb.auth.getSession().then(function (res) {
-    return !!(res.data && res.data.session);
-  });
+  // 화면 표시용: 로그인 토큰이 있으면 관리자 버튼을 보여줌 (실제 권한은 서버가 매번 확인하고, 만료되면 토큰을 지움)
+  return Promise.resolve(!!getAdminToken());
 }
 
 function applyActiveNav() {
@@ -72,7 +71,7 @@ function fillBrand(settings) {
 
 document.addEventListener('DOMContentLoaded', function () {
   applyActiveNav();
-  sb.from('설정').select('*').eq('id', 1).single().then(function (res) {
+  db.from('설정').select('*').eq('id', 1).single().then(function (res) {
     if (res.data) fillBrand(res.data);
   });
 });
